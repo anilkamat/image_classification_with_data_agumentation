@@ -1,7 +1,9 @@
 #%%
+from tkinter.tix import COLUMN
 import tensorflow as tf
 from PIL import Image
 import os
+import numpy as np
 
 #%%
 breeds = ["beagle", "bernese_mountain_dog", "doberman", "labrador_retriever", "siberian_husky"]
@@ -83,7 +85,7 @@ history_df = pd.DataFrame.from_dict(history.history)
 history_df[['accuracy','loss','val_accuracy']].plot()
 #%%
 def train_model(Network, epochs = 5 ):
-    model = Network
+    model = Sequential(Network)
     Model.compile(optimizer= 'adam',loss=tf.keras.losses.CategoricalCrossentropy(from_logits = True),metrics= ['accuracy'])
     history = Model.fit(
     train,
@@ -113,3 +115,53 @@ Network = [
 hist , model = train_model(Network, 10)
 #%%
 hist[['accuracy','loss']].plot()
+#%%
+data_augmentation = tf.keras.Sequential([
+    layers.RandomFlip('horizontal', seed = 1),
+    layers.RandomZoom(0.2, seed = 2),
+    layers.RandomRotation(0.2, seed=3)
+])
+#%%
+Full_network = [data_augmentation]+Network
+
+#%%
+hist, model = train_model(Full_network, 5)
+hist[['accuracy','loss']].plot()
+
+#%%
+preds = model.predict(test)
+#print(preds)
+
+#%%
+preds = np.argmax(preds, axis=1)
+preds
+#%%
+actual_labels = np.concatenate([y for x,y in test], axis=0)
+actual_class  = np.argmax(actual_labels, axis=1 )
+
+#%%
+import itertools
+actual_images = [x.numpy().astype('uint8') for x,y in test]
+actual_images = list(itertools.chain.from_iterable(actual_images))
+actual_images = [Image.fromarray(x) for x in actual_images]
+
+#%%
+df = pd.DataFrame(zip(actual_class,preds,actual_images), columns=['actual_class','preds','actual_images'])
+#%%
+df['preds'] = df['preds'].apply(lambda x: breeds[x])
+df['actual_class'] = df['actual_class'].apply(lambda x: breeds[x])
+
+#%%
+df.head()
+
+#%%
+import base64
+import io
+
+def image_formatter(img):
+    with io.BytesIO() as buffer:
+        img.save(buffer, 'png')
+        img_str = base64.b64encode(buffer.getvalue()).decode()
+        return f'<img src="data:image/jpeg;base64,{img_str}">'
+
+df.head(5).style.format({'image': image_formatter})
